@@ -211,6 +211,7 @@ when altitude < burnAltitude then {
 }
 
 lock landing_speed to min(-altitude/3, -1).
+set safetyMargin to 30.
 until altitude < 0.2 {
     set velLat to (latitude - previousLat)/dt.
     set previousLat to latitude.
@@ -222,8 +223,9 @@ until altitude < 0.2 {
     set vel2yawPID to PID(vel2yawPID, -long2velPID[9], velLong).
     set steer to UP + r(vel2pitchPID[9], vel2yawPID[9], 180).
 
-    set deltaV to sqrt(2 * 9.81 * altitude + verticalspeed^2).
+    set deltaV to sqrt(2 * 9.81 * (altitude + safetyMargin) + verticalspeed^2).
     set burnAltitude to ((mass * 1000) * deltaV^2) / (2 * 1000 * maxthrust).
+
     if altitude > 50 {
         if altitude < burnAltitude {
             lock throttle to 1.
