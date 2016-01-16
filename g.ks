@@ -82,6 +82,7 @@ set outMax to 1.
 set previousError to 0.
 set vel2thrPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
 
+
 // latitude to velocity PID
 set desired to latitude.
 set measured to latitude.
@@ -98,15 +99,16 @@ set lat2velPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured
 // lateral velocity to pitch PID
 set desired to 0.
 set measured to 0.
-set Kp to 500.
+set Kp to 10000.
 set Ki to 0.
-set Kd to 100.
+set Kd to 50.
 set integral to 0.
 set previousMeasured to measured.
 set outMin to -10.
 set outMax to 10.
 set previousError to 0.
 set vel2pitchPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
+
 
 // longitude to velocity PID
 set desired to longitude.
@@ -124,9 +126,9 @@ set long2velPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasure
 // longitudinal velocity to yaw PID
 set desired to 0.
 set measured to 0.
-set Kp to 500.
+set Kp to 10000.
 set Ki to 0.
-set Kd to 100.
+set Kd to 50.
 set integral to 0.
 set previousMeasured to measured.
 set outMin to -10.
@@ -134,8 +136,9 @@ set outMax to 10.
 set previousError to 0.
 set vel2yawPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
 
+
 when true then {
-    set monitoredPID to alt2velPID.
+    set monitoredPID to vel2pitchPID.
     print "ERROR:      " + (monitoredPID[0] - monitoredPID[1]) + "" at (5,4).
     print "DESIRED:    " + monitoredPID[0] + "      " at (5,5).
     print "MEASURED:   " + monitoredPID[1] + "      " at (5,6).
@@ -150,98 +153,69 @@ when true then {
     preserve.
 }
 
-set padheight to alt:radar.
-lock altitude to alt:radar - padheight.
-set padlatitude to latitude.
-set padlongitude to longitude.
+lock altitude to alt:radar.
+set padlatitude to -0.0971712693572044.
+set padlongitude to -74.5576858520508.
 set dt to 0.1.
-set targetAltitude to 0.
 sas off.
 rcs on.
 
 // END SETUP
 
+// now land with a suicide burn.
+set safetyMargin to 100.
+
 set steer to UP + r(0,0,180).
 lock steering to steer.
 lock throttle to 0.
-Stage.
-Print "Blastoff!".
-
-// hover for a while.
-set timer to missiontime.
 set previousLat to latitude.
 set previousLong to longitude.
-until missiontime - timer > 30 {
-    set alt2velPID to PID(alt2velPID, 3000, altitude).
-    set vel2thrPID to PID(vel2thrPID, alt2velPID[9], verticalSpeed).
-    lock throttle to vel2thrPID[9].
+lock latVel to (latitude - previousLat)/dt.
+lock longVel to (longitude - previousLong)/dt.
 
-    set velLat to (latitude - previousLat)/dt.
-    set previousLat to latitude.
-    set lat2velPID to PID(lat2velPID, padlatitude, latitude).
-    set vel2pitchPID to PID(vel2pitchPID, -lat2velPID[9], velLat).
-
-    set velLong to (longitude - previousLong)/dt.
-    set previousLong to longitude.
-    set long2velPID to PID(long2velPID, padlongitude, longitude).
-    set vel2yawPID to PID(vel2yawPID, -long2velPID[9], velLong).
-
-    set steer to UP + r(vel2pitchPID[9], vel2yawPID[9], 180).
-
-    wait dt.
-}
-
-// now land with a suicide burn.
-set deltaV to sqrt(2 * 9.81 * alt:radar + verticalspeed^2).
-set burnAltitude to ((mass * 1000) * deltaV^2) / (2 * 1000 * maxthrust).
-print burnAltitude.
-lock throttle to 0.
-
-when altitude < burnAltitude then {
-    lock throttle to 1.
-
-    when verticalspeed > 0 then {
-        lock throttle to vel2thrPID[9].
-
-        when altitude < 0.5 then {
-            lock throttle to 0.
-            set runmode to 0.
-        }
-    }
-}
-
-lock landing_speed to min(-altitude/3, -1).
-set safetyMargin to 30.
-until altitude < 0.2 {
-    set velLat to (latitude - previousLat)/dt.
-    set previousLat to latitude.
-    set lat2velPID to PID(lat2velPID, padlatitude, latitude).
-    set vel2pitchPID to PID(vel2pitchPID, -lat2velPID[9], velLat).
-    set velLong to (longitude - previousLong)/dt.
-    set previousLong to longitude.
-    set long2velPID to PID(long2velPID, padlongitude, longitude).
-    set vel2yawPID to PID(vel2yawPID, -long2velPID[9], velLong).
-    set steer to UP + r(vel2pitchPID[9], vel2yawPID[9], 180).
-
-    set deltaV to sqrt(2 * 9.81 * (altitude + safetyMargin) + verticalspeed^2).
-    set burnAltitude to ((mass * 1000) * deltaV^2) / (2 * 1000 * maxthrust).
-
-    if altitude > 50 {
-        if altitude < burnAltitude {
-            lock throttle to 1.
+UNTIL FALSE {
+    // suicide burn
+    if altitude > 200 {
+        set deltaV to sqrt(2 * 2.94 * (altitude + safetyMargin) + verticalspeed^2).
+        set burnAltitude to ((mass * 1000) * deltaV^2) / (2 * 1000 * maxthrust).
+        print "BURN ALTITUDE: "+burnAltitude at (5,16).
+        if altitude < burnAltitude and verticalspeed < 0 {
             print "SUICIDE BURNING" at (5,17).
+            lock throttle to 1.
         } else {
+            print "               " at (5,17).
             lock throttle to 0.
         }
     } else {
-        set vel2thrPID to PID(vel2thrPID, landing_speed, verticalSpeed).
+        gear on.
+        // cancel out horizontal velocity
+        set vel2yawPID to PID(vel2yawPID, 0, longVel).
+        set vel2pitchPID to PID(vel2pitchPID, 0, latVel).
+        set steer to UP + r(-vel2pitchPID[9], -vel2yawPID[9], 180).
+
+        // hover until horizontal velocity is gone, then decend slowly
+        if groundspeed > 1 {
+            print "CANCELLING OUT HORIZONTAL VELOCITY" at (5,17).
+            set alt2velPID to PID(alt2velPID, 10, altitude).
+            set targetVerticalSpeed to alt2velPID[9].
+        } else {
+            print "LANDING" at (5,17).
+            set targetVelocity to min(-altitude/3, -1).
+        }
+        set vel2thrPID to PID(vel2thrPID, targetVerticalSpeed, verticalSpeed).
         lock throttle to vel2thrPID[9].
     }
 
-    print "BURN ALTITUDE:        " + burnAltitude + "      " at (5,16).
+    if altitude < 10 {
+        print "Touchdown!".
+        lock throttle to 0.
+        break.
+    }
+
+    set previousLat to latitude.
+    set previousLong to longitude.
 
     wait dt.
 }
 
-lock throttle to 0.
 SET SHIP:CONTROL:PILOTMAINTHROTTLE TO 0.
