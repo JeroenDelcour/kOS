@@ -20,7 +20,7 @@ when stage:liquidfuel < 0.1 then {
 
 until ship:apoapsis > targetOrbit {
 	if ship:altitude > 1000 {
-		set targetPitch to max(1, (90 * (1 - SHIP:ALTITUDE / 20000))).
+		set targetPitch to max(1, (90 * (1 - SHIP:ALTITUDE / 35000))).
 		lock steering to heading(90, targetPitch).
 	}
 }
