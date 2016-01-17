@@ -1,11 +1,7 @@
-// lots of kudos to Daniel Rings, his code was a major help:
+// kudos to Daniel Rings, his code was a major help:
 // https://github.com/DanielRings/ReusableLaunchSystem/tree/master/kOS%20Script
 
-// SETUP
-
 clearscreen.
-
-// set CONFIG:IPU to 300.
 
 function PID {
     parameter x.
@@ -56,6 +52,8 @@ function PID {
     return x.
 }
 
+/////////////////////////////////
+
 // altitude to velocity PID
 Set desired to 0.
 Set measured to verticalspeed.
@@ -82,6 +80,7 @@ set outMax to 1.
 set previousError to 0.
 set vel2thrPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
 
+/////////////////////////////////
 
 // latitude to velocity PID
 set desired to latitude.
@@ -104,11 +103,12 @@ set Ki to 0.
 set Kd to 50.
 set integral to 0.
 set previousMeasured to measured.
-set outMin to -10.
-set outMax to 10.
+set outMin to -20.
+set outMax to 20.
 set previousError to 0.
 set vel2pitchPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
 
+/////////////////////////////////
 
 // longitude to velocity PID
 set desired to longitude.
@@ -131,14 +131,15 @@ set Ki to 0.
 set Kd to 50.
 set integral to 0.
 set previousMeasured to measured.
-set outMin to -10.
-set outMax to 10.
+set outMin to -20.
+set outMax to 20.
 set previousError to 0.
 set vel2yawPID to list(desired, measured, Kp, Ki, Kd, integral, previousMeasured, outMin, outMax, 0, previousError).
 
+/////////////////////////////////
 
 when true then {
-    set monitoredPID to vel2pitchPID.
+    set monitoredPID to vel2thrPID.
     print "ERROR:      " + (monitoredPID[0] - monitoredPID[1]) + "" at (5,4).
     print "DESIRED:    " + monitoredPID[0] + "      " at (5,5).
     print "MEASURED:   " + monitoredPID[1] + "      " at (5,6).
@@ -153,6 +154,8 @@ when true then {
     preserve.
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+
 lock altitude to alt:radar.
 set padlatitude to -0.0971712693572044.
 set padlongitude to -74.5576858520508.
@@ -160,9 +163,9 @@ set dt to 0.1.
 sas off.
 rcs on.
 
-// END SETUP
+// end of setup
+// start suicide burn
 
-// now land with a suicide burn.
 set safetyMargin to 100.
 
 set steer to UP + r(0,0,180).
@@ -176,16 +179,29 @@ lock longVel to (longitude - previousLong)/dt.
 UNTIL FALSE {
     // suicide burn
     if altitude > 200 {
-        set deltaV to sqrt(2 * 2.94 * (altitude + safetyMargin) + verticalspeed^2).
+
+        // point retrograde
+        set steer to (-1) * SHIP:VELOCITY:SURFACE.
+
+        // calculate when to start the burn
+        if verticalspeed < 0 {
+
+        }
+        set gravity to body:mu / (ship:altitude + body:radius)^2.
+        set verticalDeltaV to sqrt(2 * gravity * (altitude + safetyMargin) + verticalspeed^2).
+        set horizontalDeltaV to groundspeed.
+        set deltaV to max(0, verticalDeltaV + horizontalDeltaV).
         set burnAltitude to ((mass * 1000) * deltaV^2) / (2 * 1000 * maxthrust).
         print "BURN ALTITUDE: "+burnAltitude at (5,16).
+
         if altitude < burnAltitude and verticalspeed < 0 {
-            print "SUICIDE BURNING" at (5,17).
+            print "PERFORMING SUICIDE BURN           " at (5,17).
             lock throttle to 1.
         } else {
-            print "               " at (5,17).
+            print "                                  " at (5,17).
             lock throttle to 0.
         }
+
     } else {
         gear on.
         // cancel out horizontal velocity
@@ -193,22 +209,25 @@ UNTIL FALSE {
         set vel2pitchPID to PID(vel2pitchPID, 0, latVel).
         set steer to UP + r(-vel2pitchPID[9], -vel2yawPID[9], 180).
 
-        // hover until horizontal velocity is gone, then decend slowly
+        // hover until horizontal velocity is almost gone, then decend slowly
         if groundspeed > 1 {
             print "CANCELLING OUT HORIZONTAL VELOCITY" at (5,17).
-            set alt2velPID to PID(alt2velPID, 10, altitude).
+            set alt2velPID to PID(alt2velPID, 50, altitude).
             set targetVerticalSpeed to alt2velPID[9].
         } else {
-            print "LANDING" at (5,17).
-            set targetVelocity to min(-altitude/3, -1).
+            print "LANDING                           " at (5,17).
+            set targetVerticalSpeed to min(-1, max(-altitude/3, -10)).
+            //set targetVerticalSpeed to -1.
         }
         set vel2thrPID to PID(vel2thrPID, targetVerticalSpeed, verticalSpeed).
         lock throttle to vel2thrPID[9].
     }
 
-    if altitude < 10 {
+    if status = "LANDED" {
+        clearscreen.
         print "Touchdown!".
         lock throttle to 0.
+        sas on.
         break.
     }
 
